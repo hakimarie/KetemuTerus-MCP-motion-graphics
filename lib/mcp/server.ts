@@ -86,7 +86,7 @@ export function buildServer() {
     const shots = await listShots(projectId);
     if (!shots.length) return result({ projectId, status: project.status, ready: false, note: "Call generate_motion_video first." });
     for (const shot of shots) {
-      if (shot.status !== "generating" || !shot.interactionId) continue;
+      if ((shot.status !== "generating" && shot.status !== "processing") || !shot.interactionId) continue;
       try {
         const interaction = await getInteraction(shot.interactionId);
         if (interaction.status === "failed" || interaction.status === "cancelled") {
