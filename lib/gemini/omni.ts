@@ -1,4 +1,5 @@
 const API_BASE = "https://generativelanguage.googleapis.com/v1beta";
+const API_REVISION = "2026-05-20";
 
 function apiKey(): string {
   const key = process.env.GEMINI_API_KEY;
@@ -9,6 +10,7 @@ function apiKey(): string {
 async function geminiFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set("x-goog-api-key", apiKey());
+  headers.set("Api-Revision", API_REVISION);
   if (init.body) headers.set("content-type", "application/json");
   const response = await fetch(`${API_BASE}${path}`, { ...init, headers, cache: "no-store" });
   if (!response.ok) {
@@ -30,7 +32,7 @@ export async function startVideoInteraction(input: {
   aspectRatio: "9:16" | "16:9";
   resolution: "720p" | "1080p";
 }): Promise<StartedInteraction> {
-  const model = process.env.GEMINI_VIDEO_MODEL || "gemini-omni-1.2-flash";
+  const model = process.env.GEMINI_VIDEO_MODEL || "gemini-omni-1.1-flash";
   const response = await geminiFetch("/interactions", {
     method: "POST",
     body: JSON.stringify({
@@ -42,7 +44,6 @@ export async function startVideoInteraction(input: {
         type: "video",
         aspect_ratio: input.aspectRatio,
         resolution: input.resolution,
-        duration: `${input.durationSec}s`,
         delivery: "uri"
       }
     })
@@ -62,15 +63,13 @@ export async function getInteraction(id: string): Promise<any> {
 }
 
 export async function getFileInfo(fileName: string): Promise<any> {
-  const response = await geminiFetch(`/files/${encodeURIComponent(fileName)}`);
+  const response = await geminiFetch(`/${encodeURIComponent(fileName)}`);
   return response.json();
 }
 
-export async function downloadGeminiFile(uriOrName: string): Promise<Buffer> {
-  const fileName = uriOrName.startsWith("files/")
-    ? uriOrName
-    : `files/${uriOrName.match(/files\/([^/:?]+)/)?.[1] ?? uriOrName}`;
-  const response = await geminiFetch(`/${fileName}:download?alt=media`);
+export async function downloadGeminiFile(fileName: string): Promise<Buffer> {
+  const normalized = fileName.startsWith("files/") ? fileName : `files/${fileName}`;
+  const response = await geminiFetch(`/${normalized}:download?alt=media`);
   return Buffer.from(await response.arrayBuffer());
 }
 
@@ -79,6 +78,7 @@ export function extractVideoOutput(interaction: any): { data?: string; uri?: str
   if (direct?.data || direct?.uri) return { data: direct.data, uri: direct.uri };
 
   for (const step of interaction?.steps ?? []) {
+    if (step?.type !== "model_output") continue;
     for (const item of step?.content ?? []) {
       if (item?.type === "video" && (item.data || item.uri)) {
         return { data: item.data, uri: item.uri };

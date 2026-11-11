@@ -33,7 +33,7 @@ export function buildServer() {
       instructions:
         "KetemuTerus Motion Studio. Create branded social videos with Gemini Omni Flash. " +
         "Workflow: create_motion_brief -> generate_motion_video -> check_video_status -> get_video_result. " +
-        "Default output is 9:16 portrait, 15 seconds, 1080p."
+        "Default output is 9:16 portrait, 10 seconds, 1080p. Current single-generation limit is 10 seconds."
     }
   );
 
@@ -44,7 +44,7 @@ export function buildServer() {
       title: z.string().min(3).max(120),
       objective: z.string().min(3).max(300),
       prompt: z.string().min(10).max(5000),
-      targetDurationSec: z.number().int().min(3).max(15).default(15),
+      targetDurationSec: z.number().int().min(3).max(10).default(10),
       aspectRatio: z.enum(["9:16", "16:9"]).default("9:16"),
       resolution: z.enum(["720p", "1080p"]).default("1080p"),
       tone: z.string().max(300).optional(),
@@ -87,7 +87,7 @@ export function buildServer() {
         projectId,
         interactionId: started.id,
         status: started.status,
-        model: process.env.GEMINI_VIDEO_MODEL || "gemini-omni-1.2-flash",
+        model: process.env.GEMINI_VIDEO_MODEL || "gemini-omni-1.1-flash",
         next: "Poll check_video_status. Generation runs in the background."
       });
     }
@@ -104,8 +104,8 @@ export function buildServer() {
       if (!project.providerInteractionId) return result({ projectId, status: project.status, ready: false, note: "Call generate_motion_video first." });
 
       const interaction = await getInteraction(project.providerInteractionId);
-      if (interaction.status === "failed") {
-        const message = interaction.error?.message || "Gemini generation failed.";
+      if (interaction.status === "failed" || interaction.status === "cancelled") {
+        const message = interaction.error?.message || `Gemini generation ${interaction.status}.`;
         await updateProject(projectId, { status: "failed", errorMessage: message });
         return result({ projectId, status: "failed", error: message });
       }
