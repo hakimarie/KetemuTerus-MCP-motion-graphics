@@ -126,16 +126,13 @@ export function buildServer() {
     }));
     const response = await fetch(worker.replace(/\/$/, "") + "/render", {
       method: "POST", headers: { authorization: "Bearer " + token, "content-type": "application/json" },
-      body: JSON.stringify({ clips: urls, aspectRatio: project.brief.aspectRatio }), signal: AbortSignal.timeout(55000)
+      body: JSON.stringify({ projectId, clips: urls, aspectRatio: project.brief.aspectRatio }), signal: AbortSignal.timeout(55000)
     });
     if (!response.ok) throw new Error("Render worker failed (" + response.status + "): " + (await response.text()).slice(0, 1000));
-    const final = Buffer.from(await response.arrayBuffer());
-    if (final.length < 100000) throw new Error("Final render payload is unexpectedly small.");
-    const finalPath = "projects/" + projectId + "/final.mp4";
-    const { error } = await getSupabase().storage.from(VIDEO_BUCKET).upload(finalPath, final, { contentType: "video/mp4", upsert: true });
-    if (error) throw new Error("Final video upload failed: " + error.message);
-    await updateProject(projectId, { status: "completed", finalVideoPath: finalPath, errorMessage: null });
-    return result({ projectId, status: "completed", ready: true, finalDurationSec: project.brief.targetDurationSec, shotCount: current.length, fileSizeBytes: final.length, next: "Call get_video_result for the final MP4 link." });
+    const rendered = await response.json();
+    if (!rendered.ok || !rendered.path) throw new Error("Render worker did not return a stored final video path.");
+    await updateProject(projectId, { status: "completed", finalVideoPath: rendered.path, errorMessage: null });
+    return result({ projectId, status: "completed", ready: true, finalDurationSec: project.brief.targetDurationSec, shotCount: current.length, fileSizeBytes: rendered.sizeBytes, next: "Call get_video_result for the final MP4 link." });
   });
   server.tool("get_video_result", "Get a time-limited download link for the final MP4.", { projectId: z.string().uuid() }, async ({ projectId }) => {
     const project = await getProject(projectId);
