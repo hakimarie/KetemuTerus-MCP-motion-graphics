@@ -44,6 +44,7 @@ export async function startVideoInteraction(input: {
         type: "video",
         aspect_ratio: input.aspectRatio,
         resolution: input.resolution,
+        duration: `${input.durationSec}s`,
         delivery: "uri"
       }
     })
@@ -63,7 +64,8 @@ export async function getInteraction(id: string): Promise<any> {
 }
 
 export async function getFileInfo(fileName: string): Promise<any> {
-  const response = await geminiFetch(`/${encodeURIComponent(fileName)}`);
+  const safePath = fileName.split("/").map(encodeURIComponent).join("/");
+  const response = await geminiFetch(`/${safePath}`);
   return response.json();
 }
 
