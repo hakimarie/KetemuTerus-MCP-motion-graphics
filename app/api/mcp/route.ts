@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextRequest } from "next/server";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { buildServer } from "@/lib/mcp/server";
 
 export const runtime = "nodejs";
@@ -27,19 +27,30 @@ export async function POST(request: NextRequest) {
   }
   if (!isAuthorized(request)) return jsonError("Unauthorized", 401);
 
+  const headers = new Headers(request.headers);
+  if (!headers.has("accept")) headers.set("accept", "application/json, text/event-stream");
+  const mcpRequest = new Request(request, { headers });
+
   const server = buildServer();
-  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+  const transport = new WebStandardStreamableHTTPServerTransport({
+    sessionIdGenerator: undefined,
+    enableJsonResponse: true
+  });
+
   try {
     await server.connect(transport);
-    return await transport.handleRequest(request as unknown as Request);
+    return await transport.handleRequest(mcpRequest);
   } catch (error) {
     console.error("MCP request failed:", error);
     return jsonError("MCP request failed", 500);
+  } finally {
+    await transport.close().catch(() => undefined);
+    await server.close().catch(() => undefined);
   }
 }
 
 export async function GET() {
-  return jsonError("This MCP endpoint accepts Streamable HTTP POST requests only.", 405);
+  return jsonError("This stateless MCP endpoint accepts POST requests only.", 405);
 }
 
 export async function DELETE() {
